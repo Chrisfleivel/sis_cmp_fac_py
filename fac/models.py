@@ -10,9 +10,10 @@ from django.db.models import Sum
 from bases.models import ClaseModelo, ClaseModelo2
 from inv.models import Producto
 
-# agregados
+# Agregados para la lógica de cuotas
 from datetime import date, timedelta
-import calendar # Para manejo de días en el mes
+import calendar
+import json # Para manejar JSONField o parsear string de días
 
 
 class Cliente(ClaseModelo):
@@ -50,20 +51,21 @@ class Cliente(ClaseModelo):
     class Meta:
         verbose_name_plural = "Clientes"
 
+
     
 class FacturaEnc(ClaseModelo2):
-    NAT='CO' # Contado
-    JUR='CR' # Crédito
+    CONTADO='CO' # Contado
+    CREDITO='CR' # Crédito
     TIPO_PAGO = [
-        (NAT,'Contado'),
-        (JUR,'Crédito')
+        (CONTADO,'Contado'),
+        (CREDITO,'Crédito')
     ]
 
-    REG='RE' # Regular
-    IRR='IR' # Irregular
+    REGULAR='RE' # Vencimiento Regular
+    IRREGULAR='IR' # Vencimiento Irregular
     TIPO_VENCIMIENTO = [
-        (REG,'Vencimiento Regular'),
-        (IRR,'Vencimiento Irregular')
+        (REGULAR,'Regular'),
+        (IRREGULAR,'Irregular')
     ]
 
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE)
@@ -71,30 +73,42 @@ class FacturaEnc(ClaseModelo2):
     sub_total=models.FloatField(default=0)
     descuento=models.FloatField(default=0)
     total=models.FloatField(default=0)
-
-    # Nuevos campos
+    
+    # Nuevos campos para manejar el crédito
     tipo_pago = models.CharField(
         max_length=2,
         choices=TIPO_PAGO,
-        default='CO'
+        default=CONTADO,
+        help_text="Tipo de pago: Contado o Crédito"
+    )
+    cantidad_cuotas = models.IntegerField(
+        default=1,
+        help_text="Número de cuotas si es a crédito"
     )
     tipo_vencimiento = models.CharField(
         max_length=2,
         choices=TIPO_VENCIMIENTO,
+        default=REGULAR,
+        help_text="Tipo de vencimiento de cuotas: Regular o Irregular"
+    )
+    # Campo para almacenar los días de vencimiento irregulares (ej: [30, 45, 60])
+    # Se recomienda usar JSONField para esto en Django 3.1+ o Text/CharField para versiones anteriores
+    dias_vencimiento_irregular = models.CharField(
+        max_length=255, # Suficiente para una cadena JSON de días
+        blank=True,
         null=True,
-        blank=True
+        help_text="Lista de días para vencimientos irregulares (ej: '30,60,90')"
     )
-    cantidad_cuotas = models.PositiveIntegerField(
-        default=1
-    )
-    # ... (resto de los campos existentes)
+
 
     def __str__(self):
-        return '{}'.format(self.id)
+        return 'Factura Nro. {}'.format(self.id)
 
-    def save(self):
-        self.total = self.sub_total - self.descuento
-        super(FacturaEnc,self).save()
+    def save(self, *args, **kwargs):
+        # Asegurarse que el total siempre sea >= 0
+        if self.total < 0:
+            self.total = 0
+        super(FacturaEnc, self).save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural = "Encabezado Facturas"
@@ -104,11 +118,11 @@ class FacturaEnc(ClaseModelo2):
         ]
     
 
-class FacturaDet(ClaseModelo2):
-    factura = models.ForeignKey(FacturaEnc,on_delete=models.CASCADE)
-    producto=models.ForeignKey(Producto,on_delete=models.CASCADE)
-    cantidad=models.BigIntegerField(default=0)
-    precio=models.FloatField(default=0)
+class FacturaDet(ClaseModelo):
+    factura = models.ForeignKey(FacturaEnc, on_delete=models.CASCADE)
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
+    cantidad = models.IntegerField(default=0)
+    precio = models.FloatField(default=0)
     sub_total=models.FloatField(default=0)
     descuento=models.FloatField(default=0)
     total=models.FloatField(default=0)
@@ -129,6 +143,25 @@ class FacturaDet(ClaseModelo2):
         ]
 
 
+# Modelo para las cuotas generadas por las facturas a crédito
+class Cuenta(ClaseModelo2):
+    factura = models.ForeignKey(FacturaEnc, on_delete=models.CASCADE)
+    numero_cuota = models.IntegerField(default=1)
+    importe = models.FloatField(default=0)
+    fecha_vencimiento = models.DateField()
+    cobrado = models.BooleanField(default=False)
+    fecha_cobro = models.DateField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Cuota {self.numero_cuota} de Factura {self.factura.id}"
+
+    class Meta:
+        verbose_name_plural = "Cuentas por Cobrar/Pagar"
+        verbose_name = "Cuenta"
+        unique_together = ('factura', 'numero_cuota') # Cada cuota debe ser única por factura y número
+
+
+# Signals para actualizar FacturaEnc al guardar/eliminar FacturaDet
 @receiver(post_save, sender=FacturaDet)
 def detalle_fac_guardar(sender,instance,**kwargs):
     factura_id = instance.factura.id
@@ -148,107 +181,81 @@ def detalle_fac_guardar(sender,instance,**kwargs):
         
         enc.sub_total = sub_total
         enc.descuento = descuento
-        enc.save()
-
-    prod=Producto.objects.filter(pk=producto_id).first()
+        enc.total = sub_total - descuento
+        enc.save() # Guarda la factura, pero evita el signal de la factura para no crear cuotas en bucle
+    
+    # Actualizar existencia del producto
+    prod = Producto.objects.filter(pk=producto_id).first()
     if prod:
-        cantidad = int(prod.existencia) - int(instance.cantidad)
-        prod.existencia = cantidad
+        prod.existencia = prod.existencia - instance.cantidad
         prod.save()
 
 
-class Cuenta(ClaseModelo2): # ClaseModelo2 si también necesita usuario_crea, usuario_modifica
-    factura = models.ForeignKey(FacturaEnc, on_delete=models.CASCADE) # O FacturaCompraEnc
-    numero_cuota = models.PositiveIntegerField()
-    importe = models.FloatField(default=0)
-    fecha_vencimiento = models.DateField()
-    pagado = models.BooleanField(default=False)
-    fecha_pago = models.DateField(null=True, blank=True)
+@receiver(post_delete, sender=FacturaDet)
+def detalle_fac_borrar(sender,instance,**kwargs):
+    factura_id = instance.factura.id
+    producto_id = instance.producto.id
 
-    def __str__(self):
-        return 'Factura: {} - Cuota: {}'.format(self.factura, self.numero_cuota)
+    enc = FacturaEnc.objects.get(pk=factura_id)
+    if enc:
+        sub_total = FacturaDet.objects \
+            .filter(factura=factura_id) \
+            .aggregate(sub_total=Sum('sub_total')) \
+            .get('sub_total',0.00)
+        
+        descuento = FacturaDet.objects \
+            .filter(factura=factura_id) \
+            .aggregate(descuento=Sum('descuento')) \
+            .get('descuento',0.00)
+        
+        enc.sub_total = sub_total
+        enc.descuento = descuento
+        enc.total = sub_total - descuento
+        enc.save() # Guarda la factura, pero evita el signal de la factura para no crear cuotas en bucle
 
-    class Meta:
-        verbose_name_plural = "Cuentas"
-        verbose_name="Cuenta"
-        unique_together = ('factura', 'numero_cuota') # Para asegurar unicidad de cuota por factura
+    # Regresar existencia del producto
+    prod = Producto.objects.filter(pk=producto_id).first()
+    if prod:
+        prod.existencia = prod.existencia + instance.cantidad
+        prod.save()
 
 
-
-# ... (tus modelos FacturaEnc y Cuenta definidos arriba)
-
+# Signal para generar cuotas cuando una FacturaEnc se guarda y es a crédito
 @receiver(post_save, sender=FacturaEnc)
 def generar_cuotas_factura(sender, instance, created, **kwargs):
-    if created and instance.tipo_pago == 'CR': # Solo si es una nueva factura y es a crédito
-        total_factura = instance.total
-        cantidad_cuotas = instance.cantidad_cuotas
-        importe_por_cuota = total_factura / cantidad_cuotas
-        
-        fecha_factura = instance.fecha.date() # Obtener solo la fecha sin la hora
+    if created and instance.tipo_pago == 'CR' and instance.cantidad_cuotas > 0:
+        # Eliminar cuotas existentes para evitar duplicados en caso de re-guardado
+        Cuenta.objects.filter(factura=instance).delete()
 
-        # Eliminar cuotas existentes si la factura se actualiza a crédito desde otro tipo
-        # (Aunque en este prototipo, solo se generarían en 'created')
-        # Cuenta.objects.filter(factura=instance).delete()
+        fecha_factura = instance.fecha.date()
+        importe_por_cuota = instance.total / instance.cantidad_cuotas
 
-        for i in range(1, cantidad_cuotas + 1):
-            fecha_vencimiento_cuota = fecha_factura
+        dias_irregulares = []
+        if instance.tipo_vencimiento == 'IR' and instance.dias_vencimiento_irregular:
+            try:
+                # Intenta parsear como JSON array o como string separado por comas
+                if instance.dias_vencimiento_irregular.startswith('[') and instance.dias_vencimiento_irregular.endswith(']'):
+                    dias_irregulares = json.loads(instance.dias_vencimiento_irregular)
+                else:
+                    dias_irregulares = [int(d.strip()) for d in instance.dias_vencimiento_irregular.split(',')]
+            except (json.JSONDecodeError, ValueError):
+                # Fallback a un valor por defecto o error si no se puede parsear
+                dias_irregulares = [] # O maneja el error como prefieras
 
-            if instance.tipo_vencimiento == 'RE': # Vencimiento Regular (Mensual)
-                # Calcular la fecha de vencimiento sumando meses
-                # Considerar el día del mes para mantenerlo si es posible
-                target_month = fecha_factura.month + i
-                target_year = fecha_factura.year + (target_month - 1) // 12
-                target_month = (target_month - 1) % 12 + 1
-                
-                # Asegurar que el día no exceda los días del nuevo mes
-                day = min(fecha_factura.day, calendar.monthrange(target_year, target_month)[1])
-                fecha_vencimiento_cuota = date(target_year, target_month, day)
-
-            elif instance.tipo_vencimiento == 'IR': # Vencimiento Irregular (Días específicos)
-                # Aquí se asume que los días de vencimiento específicos
-                # vendrían de otra tabla o campo si no están en la UI directamente en el modelo
-                # Para este prototipo, vamos a simularlo o asumirlo.
-                # Si los días se especifican en la UI por cada cuota, se necesitaría otro modelo.
-                # Para un ensayo, podemos asumir un patrón simple o que se cargan manualmente después.
-                
-                # Ejemplo de un patrón irregular simple (se debería ajustar según la UI)
-                # Para un escenario más real, los días se guardarían en un modelo intermedio
-                # o se pasarían a través de un JSONField en FacturaEnc.
-                
-                # Para este ensayo, asumamos un ejemplo: 30, 45, 60 días
-                # En un sistema real, los días irregulares de cada cuota
-                # se guardarían en una relación Many-to-Many o un campo JSON.
-                
-                # Para el prototipo, si no tenemos los días específicos,
-                # no podemos generar un vencimiento irregular preciso aquí.
-                # Esto es una limitación del prototipo de señal sin el modelo de días irregulares.
-                
-                # Asumamos que para este ensayo, los días para cada cuota irregular
-                # se almacenan en un campo `dias_vencimiento_irregular` en `FacturaEnc`
-                # como una lista de enteros (ej: [30, 45, 60]).
-                # **Nota:** Esto requeriría un campo `JSONField` en `FacturaEnc`
-                # y una lógica de entrada en la interfaz para llenarlo.
-                
-                # Para este ensayo, vamos a poner un placeholder,
-                # ya que los días irregulares NO ESTÁN en el modelo FacturaEnc aún.
-                # Si se implementara, sería algo así:
-                # dias_irregulares = instance.dias_vencimiento_irregular # Asumiendo que es un JSONField
-                # if i <= len(dias_irregulares):
-                #    dias_a_sumar = dias_irregulares[i-1]
-                #    fecha_vencimiento_cuota = fecha_factura + timedelta(days=dias_a_sumar)
-                # else:
-                #    # Manejo de error o valor por defecto si no hay suficientes días
-                #    pass
-                
-                # Para el ENSAYO, si no tenemos el campo, hagamos un ejemplo fijo:
-                # Días de vencimiento irregulares de ejemplo: 30, 45, 60
-                dias_irregulares_ejemplo = [30, 45, 60] # Esto vendría de la UI real
-                if i <= len(dias_irregulares_ejemplo):
-                    dias_a_sumar = dias_irregulares_ejemplo[i-1]
+        for i in range(1, instance.cantidad_cuotas + 1):
+            fecha_vencimiento_cuota = None
+            if instance.tipo_vencimiento == 'RE':
+                # Vencimiento Regular: +30 días por cada cuota
+                fecha_vencimiento_cuota = fecha_factura + timedelta(days=(i * 30))
+            elif instance.tipo_vencimiento == 'IR':
+                if dias_irregulares and i <= len(dias_irregulares):
+                    dias_a_sumar = dias_irregulares[i-1]
                     fecha_vencimiento_cuota = fecha_factura + timedelta(days=dias_a_sumar)
                 else:
-                    # Si hay más cuotas que días definidos, usar el último día del patrón o un valor por defecto
-                    fecha_vencimiento_cuota = fecha_factura + timedelta(days=dias_irregulares_ejemplo[-1])
+                    # Si no hay días irregulares definidos o la cuota excede los días definidos
+                    # Se puede optar por usar el último día irregular o un valor por defecto
+                    # Aquí usaremos un valor por defecto de 30 días adicionales si no hay un patrón
+                    fecha_vencimiento_cuota = fecha_factura + timedelta(days=(i * 30)) # Fallback a regular
             
             # Crear la instancia de Cuenta
             Cuenta.objects.create(
@@ -256,7 +263,66 @@ def generar_cuotas_factura(sender, instance, created, **kwargs):
                 numero_cuota=i,
                 importe=importe_por_cuota,
                 fecha_vencimiento=fecha_vencimiento_cuota,
-                pagado=False
+                cobrado=False # Por defecto, la cuota está pendiente
             )
 
+@receiver(post_save, sender=FacturaEnc)
+def generar_cuotas(sender, instance, created, **kwargs):
+    if created and instance.tipo_pago == FacturaEnc.CR:
+        # Eliminar cuotas existentes si se edita una factura y cambia a crédito
+        # (aunque en 'created' solo se ejecuta al crear, útil si se modifica el signal para 'changed' también)
+        # instance.cuotas.all().delete() # Esto se ejecutaría si se permite editar el tipo_pago después de crear
+
+        total_a_financiar = instance.total
+        cantidad_cuotas = instance.cantidad_cuotas
+        importe_por_cuota = total_a_financiar / cantidad_cuotas
+        fecha_factura = instance.fecha.date() # Obtener solo la fecha
+
+        for i in range(1, cantidad_cuotas + 1):
+            fecha_vencimiento_cuota = None
+
+            if instance.tipo_vencimiento == FacturaEnc.REG:
+                # Vencimiento Regular: Cada cuota vence el mismo día del mes siguiente
+                # Ejemplo: FCP-30-60-90 días (asumiendo que 30 días es 1 mes, 60 es 2 meses)
+                # Esta es una interpretación común: (meses_a_sumar * 30 días)
+                meses_a_sumar = i
+                
+                # Una forma más robusta de sumar meses es:
+                # (Considerando fin de mes para evitar errores en febrero, etc.)
+                year = fecha_factura.year + (fecha_factura.month + meses_a_sumar - 1) // 12
+                month = (fecha_factura.month + meses_a_sumar - 1) % 12 + 1
+                day = min(fecha_factura.day, calendar.monthrange(year, month)[1])
+                fecha_vencimiento_cuota = date(year, month, day)
+
+            elif instance.tipo_vencimiento == FacturaEnc.IRR:
+                # Vencimiento Irregular: Días específicos para cada cuota
+                dias_irregulares_str = instance.dias_vencimiento_irregular
+                if dias_irregulares_str:
+                    try:
+                        dias_irregulares = [int(d.strip()) for d in dias_irregulares_str.split(',') if d.strip()]
+                        if i <= len(dias_irregulares):
+                            dias_a_sumar = dias_irregulares[i-1]
+                            fecha_vencimiento_cuota = fecha_factura + timedelta(days=dias_a_sumar)
+                        else:
+                            # Si hay más cuotas que días definidos, usar el último día del patrón
+                            # o lanzar un error si es un caso no esperado.
+                            # Aquí, por simplicidad, se usa el último día, o se podría repetir el patrón, etc.
+                            fecha_vencimiento_cuota = fecha_factura + timedelta(days=dias_irregulares[-1])
+                    except ValueError:
+                        # Manejar error si el formato de días_vencimiento_irregular no es válido
+                        print(f"Error: Formato de días_vencimiento_irregular incorrecto: {dias_irregulares_str}")
+                        fecha_vencimiento_cuota = fecha_factura + timedelta(days=30 * i) # Fallback a regular
+                else:
+                    # Si es irregular pero no se especificaron días, se podría manejar como error o default
+                    print("Advertencia: Tipo de vencimiento irregular sin días especificados.")
+                    fecha_vencimiento_cuota = fecha_factura + timedelta(days=30 * i) # Fallback
+
+            if fecha_vencimiento_cuota:
+                Cuenta.objects.create(
+                    factura=instance,
+                    numero_cuota=i,
+                    importe=importe_por_cuota,
+                    fecha_vencimiento=fecha_vencimiento_cuota,
+                    uc=instance.uc # Usuario que creó la factura
+                )
 

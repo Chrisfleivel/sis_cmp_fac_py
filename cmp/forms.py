@@ -1,6 +1,6 @@
+#cmp/forms.py
 from django import forms
-
-from .models import Proveedor, ComprasEnc
+from .models import Proveedor, ComprasEnc # Asegúrate de importar ComprasEnc
 
 class ProveedorForm(forms.ModelForm):
     email = forms.EmailField(max_length=254)
@@ -38,9 +38,14 @@ class ComprasEncForm(forms.ModelForm):
     
     class Meta:
         model=ComprasEnc
-        fields=['proveedor','fecha_compra','observacion',
+        fields=[
+            'proveedor','fecha_compra','observacion',
             'no_factura','fecha_factura','sub_total',
-            'descuento','total']
+            'descuento','total',
+            # Nuevos campos para crédito
+            'tipo_pago', 'num_cuotas', 'tipo_cuota', 'dias_vencimiento_irregular'
+        ]
+        exclude = ['sub_total', 'descuento', 'total', 'uc', 'um']  # Excluye los campos calculados y de usuario
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -50,6 +55,20 @@ class ComprasEncForm(forms.ModelForm):
             })
         self.fields['fecha_compra'].widget.attrs['readonly'] = True
         self.fields['fecha_factura'].widget.attrs['readonly'] = True
-        self.fields['sub_total'].widget.attrs['readonly'] = True
-        self.fields['descuento'].widget.attrs['readonly'] = True
-        self.fields['total'].widget.attrs['readonly'] = True
+        #self.fields['sub_total'].widget.attrs['readonly'] = True
+        #self.fields['descuento'].widget.attrs['readonly'] = True
+        #self.fields['total'].widget.attrs['readonly'] = True
+
+        # Campos de crédito inicialmente ocultos o deshabilitados
+        self.fields['num_cuotas'].widget.attrs['min'] = 1
+        self.fields['num_cuotas'].widget.attrs['max'] = 36 # Ejemplo de máximo
+        self.fields['num_cuotas'].required = False # Puede ser nulo si es contado
+        self.fields['tipo_cuota'].required = False
+        self.fields['dias_vencimiento_irregular'].required = False
+
+        # Esto permite que el campo JSONField reciba una cadena de texto para ser parseada por el modelo
+        # En la plantilla, este campo se puede mostrar como un textarea
+        self.fields['dias_vencimiento_irregular'].widget.attrs.update({
+            'placeholder': 'Ej: [30, 60, 90] para cuotas irregulares'
+        })
+        self.fields['dias_vencimiento_irregular'].help_text = 'Ingrese una lista JSON de días para cuotas irregulares (Ej: [30, 60, 90])'

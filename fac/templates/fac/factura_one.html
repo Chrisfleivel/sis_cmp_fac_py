@@ -29,20 +29,20 @@
             <b>Cliente:</b>&nbsp;&nbsp;{{enc.cliente.id}}&nbsp;&nbsp;- {{enc.cliente}}<br>
             <br><br>
         </small>
-        <table class="table table-condensed table-sm" width="60%">
+        <table class="table table-responsive dt-responsive nowrap">
             <thead>
-                <th>Código</th>
-                <th  align='right'>Cant.</th>
-                <th  align='right'>P. Unit.</th>
-                <th  align='right'>Sub Total</th>
-                <th  align='right'>Descuento</th>
-                <th  align='right'>Total</th>
+                <th>Cant</th>
+                <th>Producto</th>
+                <th>Precio</th>
+                <th>Sub Total</th>
+                <th>Dcto.</th>
+                <th>Total</th>
             </thead>
             <tbody>
                 {% for obj in detalle %}
                 <tr>
-                    <td>{{obj.producto.id}}</td>
                     <td>{{obj.cantidad}}</td>
+                    <td>{{obj.producto.descripcion}}</td>
                     <td>{{obj.precio}}</td>
                     <td>{{obj.sub_total}}</td>
                     <td>{{obj.descuento}}</td>
@@ -75,6 +75,63 @@
             </table>
             </div>
         </div>
+        
+        {% if enc.tipo_pago == 'CR' and enc.cuotas.all %}
+        <br><br>
+        <table class="table-responsive dt-responsive nowrap">
+            <thead>
+                <th colspan="4">CUOTAS A COBRAR</th>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Cliente:</td> <td colspan="3">{{ enc.cliente }}</td>
+                </tr>
+                <tr>
+                    <td>Factura:</td> <td colspan="3">{{ enc.id }}</td>
+                </tr>
+                <tr>
+                    <td>Fecha:</td> <td colspan="3">{{ enc.fecha|date:"d/m/Y" }}</td>
+                </tr>
+                <tr>
+                    <td>Moneda:</td> <td colspan="3">Guaraní</td> {# Asumiendo que la moneda es fija o viene del modelo #}
+                </tr>
+                <tr>
+                    <td>TIPO_PAGO:</td> <td colspan="3">Crédito</td>
+                </tr>
+                <tr>
+                    <td>TIPO_VENCIMIENTO:</td> <td colspan="3">{% if enc.tipo_vencimiento == 'REG' %}Vencimiento Regular{% else %}Vencimiento Irregular{% endif %}</td>
+                </tr>
+                <tr>
+                    <td>Cantidad de Cuotas:</td> <td colspan="3">{{ enc.cantidad_cuotas }}</td>
+                </tr>
+                {% if enc.tipo_vencimiento == 'IRR' %}
+                <tr>
+                    <td>Días Irregulares:</td> <td colspan="3">{{ enc.dias_vencimiento_irregular }}</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+        <br>
+        <table class="table-responsive dt-responsive nowrap">
+            <thead>
+                <th>Cuota</th>
+                <th>Importe</th>
+                <th>Vence</th>
+                <th>Cobrado</th>
+            </thead>
+            <tbody>
+                {% for cuota in enc.cuotas.all %}
+                <tr>
+                    <td>{{ cuota.numero_cuota }}/{{ enc.cantidad_cuotas }}</td>
+                    <td>{{ cuota.importe|floatformat:0 }}</td>
+                    <td>{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
+                    <td>{% if cuota.cobrado %}Sí{% else %}0{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
         <div class="row">
         <small class="pie">
             <br><br>

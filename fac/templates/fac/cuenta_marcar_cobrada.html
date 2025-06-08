@@ -1,0 +1,80 @@
+<div class="modal-dialog modal-lg">
+    <div class="modal-content">
+        <form role="form" id="frmMarcarCuota" action="{% url 'fac:cuenta_marcar_cobrada' obj.pk %}" method="post" class="form-inline">
+            <div class="col-xl-12 col-md-12 mb-12">
+                <div class="card border-left-warning shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    Marcar Cuota como Cobrada/Pendiente
+                                </div>
+                                <div class="dropdown-divider"></div>
+                                {% csrf_token %}
+                                <div class="row">
+                                    <input type="hidden" name="id" id="id" value="{{ obj.pk }}">
+                                    <div class="col-lg-12 form-group">
+                                        <label for="{{ form.cobrado.id_for_label }}" class="mr-2">{{ form.cobrado.label }}:</label>
+                                        {{ form.cobrado }}
+                                    </div>
+                                    <div class="col-lg-12 form-group mt-3">
+                                        <label for="{{ form.fecha_cobro.id_for_label }}" class="mr-2">{{ form.fecha_cobro.label }}:</label>
+                                        {{ form.fecha_cobro }}
+                                    </div>
+                                    {% if obj.cobrado %}
+                                    <p class="mt-3">Esta cuota fue cobrada el <strong>{{ obj.fecha_cobro|date:"d/m/Y" }}</strong> por un importe de <strong>{{ obj.importe|floatformat:2 }}</strong>.</p>
+                                    {% else %}
+                                    <p class="mt-3 text-warning">Esta cuota está pendiente de cobro por un importe de <strong>{{ obj.importe|floatformat:2 }}</strong>.</p>
+                                    {% endif %}
+                                </div>
+                                <div class="dropdown-divider"></div>
+                                <div class="row">
+                                    <div class="col">
+                                        <button type="submit" class="btn btn-danger"><span class="fa fa-save"></span> Guardar</button>
+                                        <button type="button" class="btn btn-success" onclick="return cerrar_modal()">
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-money-check-alt fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Script para manejar el envío del formulario con AJAX y recargar la lista
+    $("#frmMarcarCuota").submit(function(e) {
+        e.preventDefault();
+        var frm = $(this);
+        $.ajax({
+            type: frm.attr('method'),
+            url: frm.attr('action'),
+            data: frm.serialize(),
+            success: function(data) {
+                if (data === "OK") {
+                    location.reload(true); // Recargar la página de la lista de cuentas
+                    cerrar_modal();
+                } else {
+                    mensaje("Error al actualizar el estado de la cuota.", 'red');
+                }
+            },
+            error: function(jqXHR, textStatus, errorThrow) {
+                console.log(textStatus, errorThrow);
+                mensaje(errorThrow, 'red');
+            }
+        });
+        return false;
+    });
+
+    // Asegurarse de que el campo de fecha de cobro tenga el tipo 'date' para el datepicker nativo del navegador
+    $(document).ready(function() {
+        $('#id_fecha_cobro').attr('type', 'date');
+    });
+</script>

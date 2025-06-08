@@ -1,12 +1,13 @@
-#fac/urls.py
-
+# fac/urls.py
 from django.urls import path, include
-
-from .views import ClienteView,ClienteNew,ClienteEdit,clienteInactivar, \
-    FacturaView, facturas, \
-    ProductoView, \
-    borrar_detalle_factura, \
-    cliente_add_modify
+from .views import (
+    ClienteView, ClienteNew, ClienteEdit, clienteInactivar,
+    FacturaView, facturas,
+    ProductoView,
+    borrar_detalle_factura,
+    cliente_add_modify,
+    CuentaView, cuenta_marcar_cobrada, factura_add_detalle # Nuevas vistas
+)
 
 from .reportes import imprimir_factura_recibo, imprimir_factura_list
 
@@ -29,6 +30,10 @@ urlpatterns = [
     path('facturas/imprimir-todas/<str:f1>/<str:f2>',imprimir_factura_list, name="factura_imprimir_all"),
 
     path('facturas/clientes/new/',cliente_add_modify,name="fac_cliente_add"),
-    path('facturas/clientes/<int:pk>',cliente_add_modify,name="fac_cliente_mod"),
-
+    path('facturas/clientes/<int:pk>', cliente_add_modify, name="fac_cliente_edit"),
+    # Nuevas URLs para Cuentas
+    path('facturas/add_detalle/', factura_add_detalle, name='factura_add_detalle'),
+    path('cuentas/', CuentaView.as_view(), name="cuenta_list"),
+    path('cuentas/marcar/<int:pk>', cuenta_marcar_cobrada, name="cuenta_marcar_cobrada"),
+    # path('api/cuentas/marcar_cobrada/<int:pk>/', marcar_cuota_cobrada_api, name="api_cuota_cobrada"), # Si usas API
 ]

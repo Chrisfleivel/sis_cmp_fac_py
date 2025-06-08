@@ -1,0 +1,118 @@
+{% extends 'base/base.html' %}
+
+{% block page_content %}
+<div class="card shadow mb-4">
+    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+        <h6 class="m-0 font-weight-bold text-primary">Listado de Cuentas por Cobrar/Pagar</h6>
+        <div class="dropdown no-arrow">
+            <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+            </a>
+            <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in" aria-labelledby="dropdownMenuLink">
+                <div class="dropdown-header">Acciones:</div>
+                <a class="dropdown-item" href="{% url 'fac:factura_new' %}"><i class="fas fa-plus"></i> Nueva Factura (con crédito)</a>
+                {# Aquí podrías agregar un enlace para exportar, etc. #}
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-lg-12">
+                <form method="get" class="form-inline">
+                    <label for="cliente_filter" class="mr-2">Cliente:</label>
+                    <select name="cliente" id="cliente_filter" class="form-control mr-3">
+                        <option value="">Todos los Clientes</option>
+                        {% for cliente_filter in clientes_disponibles %}
+                            <option value="{{ cliente_filter.id }}" {% if request.GET.cliente == cliente_filter.id|stringformat:"s" %}selected{% endif %}>{{ cliente_filter.nombres }} {{ cliente_filter.apellidos }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <label for="fecha_inicio" class="mr-2">Fecha Inicio:</label>
+                    <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control mr-3" value="{{ request.GET.fecha_inicio }}">
+
+                    <label for="fecha_fin" class="mr-2">Fecha Fin:</label>
+                    <input type="date" name="fecha_fin" id="fecha_fin" class="form-control mr-3" value="{{ request.GET.fecha_fin }}">
+
+                    <label for="estado_filter" class="mr-2">Estado:</label>
+                    <select name="estado" id="estado_filter" class="form-control mr-3">
+                        <option value="">Todos</option>
+                        <option value="pendiente" {% if request.GET.estado == 'pendiente' %}selected{% endif %}>Pendientes</option>
+                        <option value="cobrado" {% if request.GET.estado == 'cobrado' %}selected{% endif %}>Cobradas</option>
+                    </select>
+
+                    <button type="submit" class="btn btn-primary mr-2">Filtrar</button>
+                    <a href="{% url 'fac:cuenta_list' %}" class="btn btn-secondary">Limpiar Filtros</a>
+                </form>
+            </div>
+        </div>
+
+        {% if not obj %}
+        <div class="alert alert-info">No hay cuentas para mostrar.</div>
+        {% endif %}
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped" id="tblCuentas">
+                <thead>
+                    <tr>
+                        <th>Factura No.</th>
+                        <th>Cliente</th>
+                        <th>Cuota</th>
+                        <th>Importe</th>
+                        <th>Fecha Vencimiento</th>
+                        <th>Estado</th>
+                        <th>Fecha Cobro</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in obj %}
+                    <tr>
+                        <td>{{ item.factura.id }}</td>
+                        <td>{{ item.factura.cliente }}</td>
+                        <td>{{ item.numero_cuota }}/{{ item.factura.cantidad_cuotas }}</td>
+                        <td>{{ item.importe|floatformat:2 }}</td>
+                        <td>{{ item.fecha_vencimiento|date:"d/m/Y" }}</td>
+                        <td>
+                            {% if item.cobrado %}
+                                <span class="badge badge-success">Cobrado</span>
+                            {% else %}
+                                <span class="badge badge-warning">Pendiente</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.fecha_cobro %}
+                                {{ item.fecha_cobro|date:"d/m/Y" }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not item.cobrado %}
+                            <button type="button" class="btn btn-success btn-circle" onclick="return abrir_modal('{% url 'fac:cuenta_marcar_cobrada' item.pk %}')">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            {% else %}
+                            {# Opcional: botón para deshacer cobro si se permite #}
+                            <button type="button" class="btn btn-info btn-circle" onclick="return abrir_modal('{% url 'fac:cuenta_marcar_cobrada' item.pk %}')">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js_page %}
+<script>
+    $(function() {
+        // Inicializar datepickers si usas alguno, por ejemplo con jQuery UI Datepicker
+        // O si estás usando datetimepicker, asegúrate de importarlo y configurarlo.
+        $("#fecha_inicio, #fecha_fin").attr('type', 'date'); // Esto convierte el input a tipo date para navegadores modernos
+    });
+</script>
+{% endblock %}

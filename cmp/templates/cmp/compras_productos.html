@@ -1,0 +1,278 @@
+{% extends 'base/base.html' %}
+{% block page_content %}
+<div class="container-fluid">
+    <h4>Editar Compra</h4>
+    <form method="post" id="frmCompras">
+        {% csrf_token %}
+        <!-- Formulario de encabezado (puedes dejarlo editable o solo lectura) -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label>Proveedor:</label>
+                    {{ form_enc.proveedor }}
+                </div>
+                <div class="form-group">
+                    <label>Fecha Compra:</label>
+                    {{ form_enc.fecha_compra }}
+                </div>
+                <div class="form-group">
+                    <label>No. Factura:</label>
+                    {{ form_enc.no_factura }}
+                </div>
+                <div class="form-group">
+                    <label>Fecha Factura:</label>
+                    {{ form_enc.fecha_factura }}
+                </div>
+                <!-- ...dentro de tu form_enc... -->
+                <div class="form-group">
+                    <label>Tipo de Pago:</label>
+                    {{ form_enc.tipo_pago }}
+                </div>
+                <div id="cuotas_credito" style="display:none;">
+                    <div class="form-group">
+                        <label>Cantidad de cuotas:</label>
+                        {{ form_enc.num_cuotas }}
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo de vencimiento:</label>
+                        {{ form_enc.tipo_cuota }}
+                    </div>
+                    <div id="vencimiento_irregular" style="display:none;">
+                        <label>Días de vencimiento para cada cuota:</label>
+                        <div id="dias_cuotas"></div>
+                        <label>Días de vencimiento para cada cuota (guardados):</label>
+                        <div class="form-control-plaintext">
+                            {{ form_enc.dias_vencimiento_irregular.value|default:"-" }}
+                        </div>
+                    </div>
+                </div>
+                <!-- ... -->
+                <div class="form-group">
+                    <label>Descripción:</label>
+                    {{ form_enc.observacion }}
+                </div>
+                <button type="submit" class="btn btn-danger">
+                    <span class="fa fa-save"></span> Guardar encabezado
+                </button>
+                <a href="{% url 'cmp:compras_list' %}" class="btn btn-success">
+                    <i class="far fa-hand-point-left"></i> Volver
+                </a>
+            </div>
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label>Sub Total:</label>
+                    <input type="text" class="form-control" value="{{ obj.sub_total|default:'0.00' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Descuento:</label>
+                    <input type="text" class="form-control" value="{{ obj.descuento|default:'0.00' }}" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Total:</label>
+                    <input type="text" class="form-control" value="{{ obj.total|default:'0.00' }}" readonly>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <hr>
+
+    <!-- Sección para agregar productos al detalle -->
+    <div class="row">
+        <div class="col-md-6">
+            <h5>Productos disponibles</h5>
+            <table class="table table-bordered table-sm">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Descripción</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in productos %}
+                    <tr>
+                        <td>{{ item.id }}</td>
+                        <td>{{ item.descripcion }}</td>
+                        <td>
+                            <button type="button" class="btn btn-warning btn-circle"
+                                onclick="selectProducto({{item.id}},'{{item.descripcion|escapejs}}')">
+                                <i class="far fa-hand-pointer"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="col-md-6">
+            <h5>Agregar producto al detalle</h5>
+            <form id="frmDetalle">
+                <input type="hidden" id="id_id_producto">
+                <div class="form-group">
+                    <label>Producto:</label>
+                    <input type="text" id="id_desc_producto" class="form-control" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Cantidad:</label>
+                    <input type="number" id="id_cantidad_detalle" class="form-control" min="1" value="1">
+                </div>
+                <div class="form-group">
+                    <label>Precio:</label>
+                    <input type="number" id="id_precio_detalle" class="form-control" min="0" step="0.01" value="0.00">
+                </div>
+                <div class="form-group">
+                    <label>Descuento:</label>
+                    <input type="number" id="id_descuento_detalle" class="form-control" min="0" step="0.01" value="0.00">
+                </div>
+                <button type="button" class="btn btn-primary" id="btnAgregarDetalle">
+                    <i class="fa fa-plus"></i> Agregar producto
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <hr>
+
+    <!-- Tabla de detalles de la compra -->
+    <h5>Detalle de la compra</h5>
+    <table class="table table-bordered table-sm">
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Precio</th>
+                <th>Sub Total</th>
+                <th>Descuento</th>
+                <th>Total</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for det in detalles %}
+            <tr>
+                <td>{{ det.producto.descripcion }}</td>
+                <td>{{ det.cantidad }}</td>
+                <td>{{ det.precio_prv|floatformat:2 }}</td>
+                <td>{{ det.sub_total|floatformat:2 }}</td>
+                <td>{{ det.descuento|floatformat:2 }}</td>
+                <td>{{ det.total|floatformat:2 }}</td>
+                <td>
+                    <button class="btn btn-danger btn-circle"
+                        onclick="return abrir_modal('{% url 'cmp:compras_del_detalle' obj.id det.id %}')">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center">No hay productos agregados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Tabla de cuotas si existen -->
+    {% if cuotas %}
+    <h5>Cuotas de Pago</h5>
+    <table class="table table-bordered table-sm">
+        <thead>
+            <tr>
+                <th># Cuota</th>
+                <th>Importe</th>
+                <th>Fecha Vencimiento</th>
+                <th>Pagado</th>
+                <th>Fecha de Pago</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cuota in cuotas %}
+            <tr>
+                <td>{{ cuota.numero_cuota }}</td>
+                <td>{{ cuota.importe|floatformat:2 }}</td>
+                <td>{{ cuota.fecha_vencimiento }}</td>
+                <td>
+                    {% if cuota.pagado %}
+                        <span class="badge badge-success">Sí</span>
+                    {% else %}
+                        <span class="badge badge-danger">No</span>
+                    {% endif %}
+                </td>
+                <td>{{ cuota.fecha_pago|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block js_page %}
+<script>
+function selectProducto(id, descripcion) {
+    $("#id_id_producto").val(id);
+    $("#id_desc_producto").val(descripcion);
+    $("#id_cantidad_detalle").val(1);
+    $("#id_precio_detalle").val(0.00);
+    $("#id_descuento_detalle").val(0.00);
+}
+function mostrarCamposCredito() {
+    if ($("#id_tipo_pago").val() === "CR") {
+        $("#cuotas_credito").show();
+    } else {
+        $("#cuotas_credito").hide();
+        $("#vencimiento_irregular").hide();
+    }
+}
+function mostrarDiasIrregulares() {
+    if ($("#id_tipo_cuota").val() === "I") {
+        $("#vencimiento_irregular").show();
+        let num = parseInt($("#id_num_cuotas").val());
+        let html = "";
+        for (let i = 1; i <= num; i++) {
+            html += `<input type="number" name="dias_cuota_${i}" min="1" class="form-control mb-1" placeholder="Días para cuota ${i}" required>`;
+        }
+        $("#dias_cuotas").html(html);
+    } else {
+        $("#vencimiento_irregular").hide();
+        $("#dias_cuotas").html("");
+    }
+}
+$("#id_tipo_pago").change(mostrarCamposCredito);
+$("#id_tipo_cuota, #id_num_cuotas").change(mostrarDiasIrregulares);
+$(document).ready(function() {
+    mostrarCamposCredito();
+    mostrarDiasIrregulares();
+});
+
+$("#btnAgregarDetalle").click(function() {
+    var producto_id = $("#id_id_producto").val();
+    var cantidad = $("#id_cantidad_detalle").val();
+    var precio = $("#id_precio_detalle").val();
+    var descuento = $("#id_descuento_detalle").val();
+
+    if (!producto_id || cantidad <= 0 || precio < 0) {
+        alert("Debe seleccionar un producto y especificar cantidad y precio válidos.");
+        return;
+    }
+
+    $.ajax({
+        url: "{% url 'cmp:compras_agregar_detalle' obj.id %}",
+        type: "POST",
+        data: {
+            'producto_id': producto_id,
+            'cantidad': cantidad,
+            'precio': precio,
+            'descuento': descuento,
+            'csrfmiddlewaretoken': '{{ csrf_token }}'
+        },
+        success: function(response) {
+            location.reload();
+        },
+        error: function(xhr) {
+            alert("Error al agregar producto.");
+        }
+    });
+});
+</script>
+{% endblock %}
