@@ -9,10 +9,11 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.urls import reverse_lazy
 from django.contrib.auth.decorators import login_required, permission_required
 from django.http import HttpResponse, JsonResponse
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from django.contrib import messages
 
 from django.contrib.auth import authenticate
+from django.db.models import Sum
 
 from bases.views import SinPrivilegios
 
@@ -20,6 +21,8 @@ from .models import Cliente, FacturaEnc, FacturaDet, Cuenta # Importar el nuevo 
 from .forms import ClienteForm, CuentaForm # Asegúrate de importar CuentaForm
 import inv.views as inv
 from inv.models import Producto
+from django.views.decorators.http import require_GET, require_POST
+
 
 from django.db.models import Q # Para filtros complejos
 
@@ -184,8 +187,11 @@ def facturas(request, id=None):
         enc.tipo_pago = request.POST.get("tipo_pago", 'CO')
         enc.cantidad_cuotas = int(request.POST.get("cantidad_cuotas", 1) or 1)
         enc.tipo_vencimiento = request.POST.get("tipo_vencimiento", 'RE')
-        enc.dias_vencimiento_irregular = request.POST.get("dias_irregulares", None)
-
+        if not enc.dias_vencimiento_irregular:
+            enc.dias_vencimiento_irregular = request.POST.get("dias_vencimiento_irregular", None)
+        enc.total = FacturaDet.objects.filter(factura=enc).aggregate(total=Sum('total'))['total'] or 0
+        enc.save()
+        actualizar_total_y_cuotas(enc, request.user)
         if enc.tipo_pago == 'CO':
             enc.cantidad_cuotas = 1
             enc.tipo_vencimiento = 'RE'
@@ -195,9 +201,12 @@ def facturas(request, id=None):
         if not enc.id:
             enc.uc = request.user
         else:
-            enc.um = request.user.id
-
+            enc.um = request.user
+        
+        enc.total = FacturaDet.objects.filter(factura=enc).aggregate(total=Sum('total'))['total'] or 0
         enc.save()
+        actualizar_total_y_cuotas(enc, request.user)
+
         messages.success(request, 'Factura Guardada')
         return redirect('fac:factura_edit', enc.id)
 
@@ -368,27 +377,208 @@ def cuenta_marcar_cobrada(request, pk):
 @permission_required('fac.add_facturadet', login_url='/login/')
 def factura_add_detalle(request):
     if request.method == "POST":
+        dias_irregulares = request.POST.get("dias_vencimiento_irregular", "")
         factura_id = request.POST.get("enc_id")
         producto_id = request.POST.get("producto_id")
         cantidad = request.POST.get("cantidad")
         precio = request.POST.get("precio")
         descuento = request.POST.get("descuento", 0)
-
+        # Imprime los valores recibidos para depuración
+        print(f"factura_id: {factura_id}, producto_id: {producto_id}, cantidad: {cantidad}, precio: {precio}, descuento: {descuento}")
+        print(f"dias_irregulares: {dias_irregulares}")
         if not (factura_id and producto_id and cantidad and precio):
-            return JsonResponse({"ok": False, "error": "Datos incompletos"})
+            missing_fields = []
+            if not factura_id: missing_fields.append("factura_id")
+            if not producto_id: missing_fields.append("producto_id")
+            if not cantidad: missing_fields.append("cantidad")
+            if not precio: missing_fields.append("precio")
+            return JsonResponse({"ok": False, "error": f"Datos incompletos: {', '.join(missing_fields)}"})
 
         try:
+            factura_id = int(factura_id)
+            producto_id = int(producto_id)
+            cantidad = int(cantidad) # O int si no permites decimales
+            precio = float(precio)     # O Decimal si usas DecimalField en el modelo
+            descuento = float(descuento)
+
             factura = FacturaEnc.objects.get(pk=factura_id)
+            if dias_irregulares:
+                factura.dias_vencimiento_irregular = dias_irregulares
+                factura.save()
+            else:
+                print(f"Factura {factura.id} si tiene días de vencimiento irregulares definidos, no se actualizarán las cuotas.")  
             producto = Producto.objects.get(pk=producto_id)
             detalle = FacturaDet.objects.create(
                 factura=factura,
                 producto=producto,
                 cantidad=cantidad,
                 precio=precio,
-                descuento=descuento
+                descuento=descuento,
+                uc=request.user,  # Usuario que crea el detalle
             )
+            # AHORA recalcula el total y las cuotas
+            factura.total = FacturaDet.objects.filter(factura=factura).aggregate(total=Sum('total'))['total'] or 0
+            factura.save()
+            if factura.tipo_vencimiento == 'RE' or factura.dias_vencimiento_irregular:
+                actualizar_total_y_cuotas(factura, request.user)
+
             return JsonResponse({"ok": True, "detalle_id": detalle.id})
+        except FacturaEnc.DoesNotExist:
+            return JsonResponse({"ok": False, "error": f"Error: Factura con ID '{factura_id}' no encontrada."})
+        except Producto.DoesNotExist:
+            return JsonResponse({"ok": False, "error": f"Error: Producto con ID '{producto_id}' no encontrado."})
+        except ValueError as ve:
+            return JsonResponse({"ok": False, "error": f"Error en el tipo de datos (cantidad/precio/descuento): {ve}. Asegúrese de que son números válidos."})
+        except Exception as e:
+            # Captura cualquier otro error inesperado y devuelve un mensaje útil
+            print(f"Error al agregar detalle: {e}")  # Para depuración
+            return JsonResponse({"ok": False, "error": f"Error interno del servidor al agregar detalle: {e}"})
+    return JsonResponse({"ok": False, "error": "Método no permitido"}, status=405)
+
+
+
+@login_required(login_url='/login/')
+def buscar_producto_modal(request):
+    productos = Producto.objects.filter(estado=True) # Filtra por activos o .all()
+    return render(request, 'fac/buscar_producto.html', {'obj': productos})
+
+
+
+@require_GET
+@login_required(login_url='/login/')
+def buscar_producto_ajax(request):
+    codigo = request.GET.get('codigo')
+    if codigo:
+        producto = Producto.objects.filter(codigo=codigo, estado=True).first()
+        if producto:
+            return JsonResponse({
+                "ok": True,
+                "id": producto.id,
+                "producto": {
+                    "codigo": producto.codigo,
+                    "descripcion": producto.descripcion,
+                    "precio": producto.precio
+                }
+            })
+        else:
+            return JsonResponse({"ok": False, "error": "Producto no encontrado"})
+    # Si no hay código, devolver todos los productos (para el modal)
+    productos = Producto.objects.filter(estado=True)
+    return JsonResponse({
+        "ok": True,
+        "productos": [
+            {
+                "id": p.id,
+                "codigo": p.codigo,
+                "descripcion": p.descripcion,
+                "precio": p.precio
+            } for p in productos
+        ]
+    })
+
+
+
+@require_GET
+@login_required(login_url='/login/')
+def factura_detalles(request):
+    enc_id = request.GET.get("enc_id")
+    if not enc_id:
+        return JsonResponse({"ok": False, "error": "No se proporcionó el ID de la factura."})
+
+    try:
+        detalles = FacturaDet.objects.filter(factura_id=enc_id)
+        lista = []
+        for det in detalles:
+            lista.append({
+                "id": det.id,
+                "codigo": det.producto.codigo if det.producto else "",
+                "descripcion": det.producto.descripcion if det.producto else "",
+                "cantidad": det.cantidad,
+                "precio": float(det.precio),
+                "descuento": float(det.descuento),
+                "sub_total": float(det.sub_total) if hasattr(det, "sub_total") else float(det.cantidad) * float(det.precio),
+                "total": float(det.total) if hasattr(det, "total") else float(det.cantidad) * float(det.precio) - float(det.descuento),
+            })
+        return JsonResponse({"ok": True, "detalles": lista})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Error al obtener detalles: {e}"})
+    
+
+
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from .models import FacturaDet, FacturaEnc
+from django.db.models import Sum
+
+@csrf_exempt
+def borrar_detalle_ajax(request):
+    if request.method == "POST":
+        detalle_id = request.POST.get("id")
+        try:
+            detalle = FacturaDet.objects.get(pk=detalle_id)
+            factura = detalle.factura
+            detalle.delete()
+            # Actualizar total de la factura
+            factura.total = FacturaDet.objects.filter(factura=factura).aggregate(total=Sum('total'))['total'] or 0
+            factura.save()
+            # Recalcular cuotas si corresponde
+            if factura.tipo_vencimiento == 'RE' or factura.dias_vencimiento_irregular:
+                from .views import actualizar_total_y_cuotas
+                actualizar_total_y_cuotas(factura, request.user)
+            return JsonResponse({"ok": True})
+        except FacturaDet.DoesNotExist:
+            return JsonResponse({"ok": False, "error": "Detalle no encontrado."})
         except Exception as e:
             return JsonResponse({"ok": False, "error": str(e)})
+    return JsonResponse({"ok": False, "error": "Método no permitido."})
 
-    return JsonResponse({"ok": False, "error": "Método no permitido"})
+
+def recalcular_cuotas(enc, user):
+    from datetime import date, timedelta
+    Cuenta.objects.filter(factura=enc).delete()
+    print(f"Recalculando cuotas para la factura {enc.id} con tipo de pago {enc.tipo_pago} y total {enc.total}")
+    if enc.tipo_pago == 'CR' and enc.total > 0:
+
+        cantidad_cuotas = enc.cantidad_cuotas or 1
+        importe_cuota = enc.total / cantidad_cuotas
+        fecha_base = date.today()
+        if enc.tipo_vencimiento in ('RE','REG'):
+            print(f"Tipo de vencimiento regular: {enc.tipo_vencimiento}")
+            for i in range(cantidad_cuotas):
+                print(f"Creando cuota {i+1} con importe {importe_cuota} y fecha de vencimiento {fecha_base + timedelta(days=30*(i+1))}")    
+                fecha_vencimiento = fecha_base + timedelta(days=30*(i+1))
+                Cuenta.objects.create(
+                    factura=enc,
+                    numero_cuota=i+1,
+                    importe=importe_cuota,
+                    fecha_vencimiento=fecha_vencimiento,
+                    cobrado=False,
+                    uc=user
+                )
+        elif enc.tipo_vencimiento in ('IR','IRR'):
+            print(f"Tipo de vencimiento irregular: {enc.tipo_vencimiento}")
+            dias_str = enc.dias_vencimiento_irregular or ''
+            print(f"Días de vencimiento irregulares 2: {dias_str}")
+            dias_list = [int(d.strip()) for d in dias_str.split(',') if d.strip().isdigit()]
+            print(f"Días de vencimiento irregulares: {dias_list}")
+            for i, dias in enumerate(dias_list):
+                print(f"Creando cuota {i+1} con importe {importe_cuota} y fecha de vencimiento {fecha_base + timedelta(days=int(dias))}")   
+                fecha_vencimiento = fecha_base + timedelta(days=int(dias))
+                Cuenta.objects.create(
+                    factura=enc,
+                    numero_cuota=i+1,
+                    importe=importe_cuota,
+                    fecha_vencimiento=fecha_vencimiento,
+                    cobrado=False,
+                    uc=user
+                )
+        else:
+            print(f"Tipo de pago no reconocido: {enc.tipo_pago}. No se crean cuotas.")
+
+
+
+def actualizar_total_y_cuotas(factura, user):
+    factura.total = FacturaDet.objects.filter(factura=factura).aggregate(total=Sum('total'))['total'] or 0
+    factura.save()
+    recalcular_cuotas(factura, user)
+

@@ -1,3 +1,4 @@
+#inv/models.py
 from django.db import models
 
 from bases.models import ClaseModelo
@@ -12,9 +13,9 @@ class Categoria(ClaseModelo):
     def __str__(self):
         return '{}'.format(self.descripcion)
 
-    def save(self):
+    def save(self, *args, **kwargs):
         self.descripcion = self.descripcion.upper()
-        super(Categoria, self).save()
+        super(Categoria, self).save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural= "Categorias"
@@ -30,9 +31,9 @@ class SubCategoria(ClaseModelo):
     def __str__(self):
         return '{}:{}'.format(self.categoria.descripcion,self.descripcion)
     
-    def save(self):
+    def save(self, *args, **kwargs):
         self.descripcion = self.descripcion.upper()
-        super(SubCategoria, self).save()
+        super(SubCategoria, self).save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural= "Sub Categorias"
@@ -49,9 +50,9 @@ class Marca(ClaseModelo):
     def __str__(self):
         return '{}'.format(self.descripcion)
 
-    def save(self):
+    def save(self, *args, **kwargs):
         self.descripcion = self.descripcion.upper()
-        super(Marca, self).save()
+        super(Marca, self).save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural = "Marca"
@@ -67,9 +68,9 @@ class UnidadMedida(ClaseModelo):
     def __str__(self):
         return '{}'.format(self.descripcion)
 
-    def save(self):
+    def save(self, *args, **kwargs):
         self.descripcion = self.descripcion.upper()
-        super(UnidadMedida, self).save()
+        super(UnidadMedida, self).save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural = "Unidades de Medida"
@@ -94,9 +95,9 @@ class Producto(ClaseModelo):
     def __str__(self):
         return '{}'.format(self.descripcion)
     
-    def save(self):
+    def save(self, *args, **kwargs):
         self.descripcion = self.descripcion.upper()
-        super(Producto,self).save()
+        super(Producto,self).save(*args, **kwargs)
     
     class Meta:
         verbose_name_plural = "Productos"

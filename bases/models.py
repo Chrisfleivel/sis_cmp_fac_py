@@ -13,6 +13,10 @@ class ClaseModelo(models.Model):
 
     class Meta:
         abstract=True
+    
+    def save(self, *args, **kwargs):
+        # ...tu lógica personalizada...
+        super().save(*args, **kwargs) 
 
 
 class ClaseModelo2(models.Model):
@@ -26,6 +30,10 @@ class ClaseModelo2(models.Model):
 
     class Meta:
         abstract=True
+    
+    def save(self, *args, **kwargs):
+        # ...tu lógica personalizada...
+        super().save(*args, **kwargs) 
 
 
 

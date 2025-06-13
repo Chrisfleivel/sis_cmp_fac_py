@@ -121,7 +121,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'es-ni'
 
-TIME_ZONE = 'America/Managua'
+TIME_ZONE = 'America/Asuncion'
 
 USE_I18N = True
 

@@ -3,221 +3,308 @@
 {% block page_content %}
 <form method="post" id="frmFacturas">
     {% csrf_token %}
-<div class="card shadow mb-4">
-    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-        <button type="submit" class="btn btn-danger">Guardar</button>
-        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <button type="submit" class="btn btn-danger">Guardar</button>
-            {% if enc %}
-                <a href="{% url 'fac:factura_imprimir_one' enc.id %}" class="btn btn-success" target="_factura">Imprimir</a>
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-end">
+            <button type="submit" class="btn btn-primary mr-2">Guardar</button>
+            {% if enc.id %}
+                <a href="{% url 'fac:factura_imprimir_one' enc.id %}" class="btn btn-success mr-2" target="_blank">Imprimir</a>
             {% endif %}
-            <a href="{% url 'fac:factura_list' %}" class="btn btn-info">Cancelar</a>
+            <a href="{% url 'fac:factura_list' %}" class="btn btn-secondary">Cancelar</a>
         </div>
-        <a href="{% url 'fac:factura_list' %}" class="btn btn-info">Cancelar</a>
-    </div>
-    <div class="card-body">
-        <div class="content">
-            <div class="row">
-                <div class="col-lg-6 form-group">
-                    <div class="content">
-                        <div class="row ">
-                            <div class="col-lg-1">No.:</div>
-                            <div class="col-lg-4">
-                                <input type="text" name="enc_id" id="enc_id" readonly class="form-control" value="{% if enc %}{{ enc.id }}{% endif %}">
+        <div class="card-body">
+            <div class="content">
+                <div class="row">
+                    <div class="col-lg-6 form-group">
+                        <div class="content">
+                            <div class="row ">
+                                <div class="col-lg-1">No.:</div>
+                                <div class="col-lg-4">
+                                    <input type="text" name="enc_id" id="enc_id" readonly class="form-control" value="{% if enc %}{{ enc.id }}{% endif %}">
+                                </div>
+                                <div class="col-lg-2">
+                                    Cliente:
+                                </div>
+                                <div class="col-lg-5 form-group">
+                                    <select name="enc_cliente" id="enc_cliente" class="form-control">
+                                        <option value="0">Seleccione Cliente</option>
+                                        {% for item in clientes %}
+                                            <option value="{{ item.id }}" {% if enc.cliente.id == item.id %}selected{% endif %}>{{ item.nombres }} {{ item.apellidos }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
                             </div>
-                            <div class="col-lg-2">
-                                Cliente:
-                            </div>
-                            <div class="col-lg-5 form-group">
-                                <select name="enc_cliente" id="enc_cliente" class="form-control">
-                                    <option value="0">Seleccione Cliente</option>
-                                    {% for item in clientes %}
-                                        <option value="{{ item.id }}" {% if enc.cliente.id == item.id %}selected{% endif %}>{{ item.nombres }} {{ item.apellidos }}</option>
-                                    {% endfor %}
-                                </select>
+                            <div class="row">
+                                <div class="col-lg-12">
+                                    <a href="#" class="btn btn-info btn-circle" id="btnEditCliente">
+                                        <i class="far fa-user"></i>
+                                    </a>
+                                </div>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-lg-12">
-                                <a href="#" class="btn btn-info btn-circle" id="btnEditCliente">
-                                    <i class="far fa-user"></i>
-                                </a>
+                    </div>
+                    <div class="col-lg-6 form-group">
+                        <div class="content">
+                            <div class="row">
+                                <div class="col-lg-3">Tipo de Pago:</div>
+                                <div class="col-lg-9 form-group">
+                                    <select name="tipo_pago" id="tipo_pago" class="form-control">
+                                        <option value="CO" {% if tipo_pago_actual == 'CO' %}selected{% endif %}>Contado</option>
+                                        <option value="CR" {% if tipo_pago_actual == 'CR' %}selected{% endif %}>Crédito</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row tipo-credito-fields">
+                                <div class="col-lg-3">Tipo Vencimiento:</div>
+                                <div class="col-lg-9 form-group">
+                                    <select name="tipo_vencimiento" id="tipo_vencimiento" class="form-control">
+                                        <option value="">Seleccione</option>
+                                        <option value="RE" {% if tipo_vencimiento_actual == 'RE' %}selected{% endif %}>Vencimiento Regular</option>
+                                        <option value="IR" {% if tipo_vencimiento_actual == 'IR' %}selected{% endif %}>Vencimiento Irregular</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row tipo-credito-fields">
+                                <div class="col-lg-3">Cantidad Cuotas:</div>
+                                <div class="col-lg-9 form-group">
+                                    <input type="number" name="cantidad_cuotas" id="cantidad_cuotas" class="form-control" min="1" value="{{ cantidad_cuotas_actual|default:1 }}">
+                                </div>
+                            </div>
+                            <div class="row irregular-fields">
+                                <div class="col-lg-3">Días Irregulares:</div>
+                                <div class="col-lg-9 form-group">
+                                    {% if enc.dias_vencimiento_irregular %}
+                                        <input type="text" id="dias_vencimiento_irregular" name="dias_vencimiento_irregular" value="{{ enc.dias_vencimiento_irregular }}" disabled>
+                                    {% else %}
+                                        <input type="text" id="dias_vencimiento_irregular" name="dias_vencimiento_irregular">
+                                    {% endif %}
+                                    <small class="form-text text-muted">Separar los días por comas (ej: 30,45,60). Cada día debe ser mayor que el anterior.</small>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-6 form-group">
-                    <div class="content">
-                        <div class="row">
-                            <div class="col-lg-3">Tipo de Pago:</div>
-                            <div class="col-lg-9 form-group">
-                                <select name="tipo_pago" id="tipo_pago" class="form-control">
-                                    <option value="CO" {% if tipo_pago_actual == 'CO' %}selected{% endif %}>Contado</option>
-                                    <option value="CR" {% if tipo_pago_actual == 'CR' %}selected{% endif %}>Crédito</option>
-                                </select>
-                            </div>
+                <!-- Formulario para agregar detalle de producto -->
+                <form id="frmDetalle">
+                    <div class="form-row">
+                        <div class="form-group col-md-2 d-flex">
+                            <input type="text" class="form-control" id="codigo" name="codigo" placeholder="Código">
+                            <!-- Botón para buscar producto -->
+                            <button type="button" class="btn btn-secondary ml-2" id="btnBuscarProducto" title="Buscar producto">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            <!-- Botón para seleccionar producto (abre modal o lista) -->
+                            <button type="button" class="btn btn-primary ml-2" id="btnSeleccionarProducto" title="Seleccionar producto">
+                                <i class="fas fa-list"></i>
+                            </button>
                         </div>
-                        <div class="row tipo-credito-fields">
-                            <div class="col-lg-3">Tipo Vencimiento:</div>
-                            <div class="col-lg-9 form-group">
-                                <select name="tipo_vencimiento" id="tipo_vencimiento" class="form-control">
-                                    <option value="">Seleccione</option>
-                                    <option value="REG" {% if tipo_vencimiento_actual == 'REG' %}selected{% endif %}>Vencimiento Regular</option>
-                                    <option value="IRR" {% if tipo_vencimiento_actual == 'IRR' %}selected{% endif %}>Vencimiento Irregular</option>
-                                </select>
-                            </div>
+                        <div class="form-group col-md-3">
+                            <input type="number" class="form-control" id="cantidad" name="cantidad" placeholder="Cantidad">
                         </div>
-                        <div class="row tipo-credito-fields">
-                            <div class="col-lg-3">Cantidad Cuotas:</div>
-                            <div class="col-lg-9 form-group">
-                                <input type="number" name="cantidad_cuotas" id="cantidad_cuotas" class="form-control" min="1" value="{{ cantidad_cuotas_actual|default:1 }}">
-                            </div>
+                        <div class="form-group col-md-3">
+                            <input type="number" class="form-control" id="precio" name="precio" placeholder="Precio">
                         </div>
-                        <div class="row irregular-fields">
-                            <div class="col-lg-3">Días Irregulares:</div>
-                            <div class="col-lg-9 form-group">
-                                <input type="text" name="dias_vencimiento_irregular" id="dias_vencimiento_irregular" class="form-control" placeholder="ej: 30,45,60" value="{{ dias_vencimiento_irregular_actual|default:'' }}">
-                                <small class="form-text text-muted">Separar los días por comas (ej: 30,45,60). Cada día debe ser mayor que el anterior.</small>
-                            </div>
+                        <div class="form-group col-md-2">
+                            <input type="number" class="form-control" id="descuento" name="descuento" placeholder="Descuento">
+                        </div>
+                        <input type="hidden" id="producto_id" name="producto_id">
+                        <div class="form-group col-md-2">
+                            <button type="button" class="btn btn-info" id="btnAgregarDetalle">Agregar</button>
                         </div>
                     </div>
-                </div>
-            </div>
-            <hr>
-            <div class="row">
-                <div class="col-lg-12">
-                    <div class="row">
-                        <div class="col-lg-1">Código:</div>
-                        <div class="col-lg-3">
-                            <input type="text" name="codigo" id="codigo" class="form-control" {% if not enc %}disabled{% endif %}>
-                        </div>
-                        <div class="col-lg-3">Descripción:</div>
-                        <div class="col-lg-5">
-                            <input type="text" name="descripcion" id="descripcion" class="form-control" readonly {% if not enc %}disabled{% endif %}>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-lg-1">Cantidad:</div>
-                        <div class="col-lg-3">
-                            <input type="number" name="cantidad" id="cantidad" class="form-control" min="1" value="1" {% if not enc %}disabled{% endif %}>
-                        </div>
-                        <div class="col-lg-1">Precio:</div>
-                        <div class="col-lg-3">
-                            <input type="number" name="precio" id="precio" class="form-control" readonly {% if not enc %}disabled{% endif %}>
-                        </div>
-                        <div class="col-lg-1">Descuento:</div>
-                        <div class="col-lg-3">
-                            <input type="number" name="descuento" id="descuento" class="form-control" min="0" value="0" {% if not enc %}disabled{% endif %}>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-lg-12">
-                            <a href="#" class="btn btn-primary" id="buscar_producto">
-                                <i class="fa fa-search"></i> Buscar Producto
-                            </a>
-                            <a href="#" class="btn btn-success" id="add_producto" {% if not enc %}disabled{% endif %}>
-                                <i class="fa fa-plus"></i> Agregar
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <hr>
-            <div class="row">
-                <div class="col-lg-12">
-                    <table class="table table-bordered table-striped" id="tblDetalles">
+                </form>
+                <!-- Aquí puedes mostrar la tabla de detalles agregados -->
+                <div id="tablaDetalles" class="mt-4">
+                    
+                    <table class="table table-bordered table-sm table-hover">
                         <thead>
-                            <th>Producto</th>
-                            <th>Cantidad</th>
-                            <th>Precio</th>
-                            <th>Sub Total</th>
-                            <th>Descuento</th>
-                            <th>Total</th>
-                            <th>Acciones</th>
-                        </thead>
-                        <tbody>
-                            {% if detalles %}
-                                {% for det in detalles %}
-                                    <tr>
-                                        <td>{{ det.producto.descripcion }}</td>
-                                        <td>{{ det.cantidad }}</td>
-                                        <td>{{ det.precio }}</td>
-                                        <td>{{ det.sub_total }}</td>
-                                        <td>{{ det.descuento }}</td>
-                                        <td>{{ det.total }}</td>
-                                        <td>
-                                            <button type="button" class="btn btn-danger btn-circle" onclick="return abrir_modal('{% url 'fac:factura_borrar_detalle' det.id %}')">
-                                                <i class="far fa-trash-alt"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="7">No hay productos en esta factura.</td>
-                                </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-md-6 offset-md-6">
-                    <table class="table table-bordered">
-                        <tr>
-                            <th>Sub Total:</th>
-                            <td class="text-right">{{ enc.sub_total|default:0 }}</td>
-                        </tr>
-                        <tr>
-                            <th>Descuento:</th>
-                            <td class="text-right">{{ enc.descuento|default:0 }}</td>
-                        </tr>
-                        <tr>
-                            <th>Total:</th>
-                            <td class="text-right"><b>{{ enc.total|default:0 }}</b></td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
-
-            {% if enc and enc.tipo_pago == 'CR' and enc.cuotas.all %}
-            <hr>
-            <div class="row">
-                <div class="col-lg-12">
-                    <h5>Detalle de Cuotas</h5>
-                    <table class="table table-bordered table-striped">
-                        <thead>
-                            <th>Cuota</th>
-                            <th>Importe</th>
-                            <th>Vence</th>
-                            <th>Cobrado</th>
-                            <th>Fecha Cobro</th>
-                        </thead>
-                        <tbody>
-                            {% for cuota in enc.cuotas.all %}
                             <tr>
-                                <td>{{ cuota.numero_cuota }}/{{ enc.cantidad_cuotas }}</td>
-                                <td>{{ cuota.importe }}</td>
-                                <td>{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
-                                <td>{% if cuota.cobrado %}<span class="badge badge-success">Sí</span>{% else %}<span class="badge badge-danger">No</span>{% endif %}</td>
-                                <td>{% if cuota.fecha_cobro %}{{ cuota.fecha_cobro|date:"d/m/Y" }}{% else %}N/A{% endif %}</td>
+                                <th>#</th>
+                                <th>Código</th>
+                                <th>Descripción</th>
+                                <th>Cantidad</th>
+                                <th>Precio</th>
+                                <th>Descuento</th>
+                                <th>Subtotal</th>
+                                <th>Total</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for det in detalle %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>{{ det.producto.codigo }}</td>
+                                <td>{{ det.producto.descripcion }}</td>
+                                <td>{{ det.cantidad }}</td>
+                                <td>{{ det.precio }}</td>
+                                <td>{{ det.descuento }}</td>
+                                <td>{{ det.subtotal }}</td>
+                                <td>{{ det.total }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-danger btn-sm" onclick="eliminar_detalle({{ det.id }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
-                </div>
-            </div>
-            {% endif %}
 
+                </div>
+                <div class="row">
+                    <div class="col-md-6 offset-md-6">
+                        <table class="table table-bordered">
+                            <tr>
+                                <th>Sub Total:</th>
+                                <td class="text-right"><span id="sub_total_factura">0</span></td>
+                            </tr>
+                            <tr>
+                                <th>Descuento:</th>
+                                <td class="text-right"><span id="descuento_factura">0</span></td>
+                            </tr>
+                            <tr>
+                                <th>Total:</th>
+                                <td class="text-right"><b><span id="total_factura">0</span></b></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                
+                <hr>
+                <div class="row">
+                    <!-- Detalle de Cuotas Mejorado -->
+                    {% if enc.cuotas.all %}
+                        <h5 class="mt-4">Detalle de Cuotas</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm table-hover">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th class="text-center">#</th>
+                                        <th class="text-right">Importe</th>
+                                        <th class="text-center">Vence</th>
+                                        <th class="text-center">Cobrado</th>
+                                        <th class="text-center">Fecha Cobro</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for cuota in enc.cuotas.all %}
+                                    <tr>
+                                        <td class="text-center">{{ cuota.numero_cuota }}</td>
+                                        <td class="text-right">{{ cuota.importe|floatformat:0 }}</td>
+                                        <td class="text-center">{{ cuota.fecha_vencimiento|date:"d/m/Y" }}</td>
+                                        <td class="text-center">
+                                            {% if cuota.cobrado %}
+                                                <span class="badge badge-success">Sí</span>
+                                            {% else %}
+                                                <span class="badge badge-danger">No</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if cuota.fecha_cobro %}
+                                                {{ cuota.fecha_cobro|date:"d/m/Y" }}
+                                            {% else %}
+                                                <span class="text-muted">N/A</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No hay cuotas generadas.</p>
+                    {% endif %}
+                </div>
+                
+            </div>
         </div>
     </div>
-</div>
 </form>
+
+<!-- Modal para seleccionar producto (ejemplo básico) -->
+<div class="modal fade" id="modalSeleccionarProducto" tabindex="-1" role="dialog" aria-labelledby="modalSeleccionarProductoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalSeleccionarProductoLabel">Seleccionar Producto</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <!-- Aquí puedes cargar una tabla/lista de productos -->
+        <table class="table table-bordered" id="tablaProductos">
+            <thead>
+                <tr>
+
+                    <th>Código</th>
+                    <th>Descripcion</th>
+                    <th>Precio</th>
+                    <th>Seleccionar</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Los productos se cargan dinámicamente vía JS/AJAX -->
+            </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block js_page %}
 <script>
+    
+    // Función para cargar los detalles de la factura
+    function cargar_detalles_factura() {
+        var enc_id = "{{ enc.id|default:'' }}";
+        if (!enc_id) return;
+        $.ajax({
+            url: '/fac/facturas/detalles/',
+            type: 'GET',
+            data: { enc_id: enc_id },
+            success: function(data) {
+                var tbody = $("#detalleBody");
+                tbody.empty();
+                var sub_total = 0;
+                var descuento = 0;
+                var total = 0;
+                if (data.ok && data.detalles) {
+                    data.detalles.forEach(function(det, idx) {
+                        sub_total += det.sub_total;
+                        descuento += det.descuento;
+                        total += det.total;
+                        var fila = `<tr>
+                            <td>${idx + 1}</td>
+                            <td>${det.codigo}</td>
+                            <td>${det.descripcion}</td>
+                            <td>${det.cantidad}</td>
+                            <td>${det.precio}</td>
+                            <td>${det.descuento}</td>
+                            <td>${det.sub_total}</td>
+                            <td>${det.total}</td>
+                            <td>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="eliminar_detalle(${det.id})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>`;
+                        tbody.append(fila);
+                    });
+                }
+                // Actualiza los totales en el HTML
+                $("#sub_total_factura").text(sub_total);
+                $("#descuento_factura").text(descuento);
+                $("#total_factura").text(total);
+            }
+        });
+    }
+
     $(function () {
+
         // Función para mostrar/ocultar campos condicionales
         function toggleCreditFields() {
             if ($("#tipo_pago").val() === "CR") {
@@ -230,7 +317,7 @@
         }
 
         function toggleIrregularFields() {
-            if ($("#tipo_vencimiento").val() === "IRR" && $("#tipo_pago").val() === "CR") {
+            if ($("#tipo_vencimiento").val() === "IR" && $("#tipo_pago").val() === "CR") {
                 $(".irregular-fields").show();
             } else {
                 $(".irregular-fields").hide();
@@ -248,82 +335,89 @@
 
         // Inicializar al cargar la página (para ediciones)
         toggleCreditFields();
-
-        // Código existente para productos y clientes
-        $("#codigo").keypress(function (e) {
-            if (e.which == 13) {
-                e.preventDefault();
-                var codigo = $(this).val();
-                if (codigo.length === 0) {
-                    mensaje("Debe de introducir el código del producto");
-                    return false;
-                }
+        // Evento para buscar producto por código
+        $("#codigo").on('change', function() {
+            var codigo = $(this).val();
+            if (codigo) {
                 buscar_producto_por_codigo(codigo);
             }
         });
 
-        $("#cantidad").change(function (e) {
-            var existencia = parseFloat($("#existencia").val());
-            var cantidad = parseFloat($(this).val());
-            if (cantidad > existencia) {
-                mensaje("No hay existencia suficiente");
-                return false;
+        // Evento para buscar producto al hacer clic en el botón
+        $("#btnBuscarProducto").on('click', function() {
+            var codigo = $("#codigo").val();
+            if (codigo) {
+                buscar_producto_por_codigo(codigo);
+            } else {
+                alert("Ingrese un código para buscar.");
             }
         });
 
-        $("#add_producto").click(function (e) {
-            e.preventDefault();
-            var enc_id = $("#enc_id").val();
+        // Evento para abrir el modal de selección de producto
+        $("#btnSeleccionarProducto").on('click', function() {
+            cargar_productos_modal();
+            $("#modalSeleccionarProducto").modal('show');
+        });
+
+        // Registrar el evento de focus solo una vez
+        $("#modalSeleccionarProducto").on('hidden.bs.modal', function () {
+            $("#codigo").focus();
+        });
+
+
+
+
+        cargar_detalles_factura();
+
+        // Evento para agregar detalle
+        $("#btnAgregarDetalle").on('click', function() {
+            var enc_id = "{{ enc.id|default:'' }}";
             var codigo = $("#codigo").val();
+            var producto_id = $("#producto_id").val();
             var cantidad = $("#cantidad").val();
             var precio = $("#precio").val();
             var descuento = $("#descuento").val();
+            var token = $("input[name='csrfmiddlewaretoken']").val();
 
-            if (enc_id === null || enc_id === undefined || enc_id == "") {
-                mensaje("Guarde el encabezado de la factura primero.");
-                return false;
+            if (descuento === "" || descuento === null || isNaN(descuento)) {
+                descuento = 0;
             }
-
-            if (codigo.length === 0) {
-                mensaje("No ha seleccionado un producto.");
-                return false;
+            
+            if (!producto_id) {
+                alert("Debe seleccionar un producto válido.");
+                return;
             }
-            if (parseFloat(cantidad) <= 0) {
-                mensaje("Cantidad debe ser mayor a cero.");
-                return false;
-            }
-
-            var token = '{{csrf_token}}';
-            var data = {
-                'enc_id': enc_id,
-                'codigo': codigo,
-                'cantidad': cantidad,
-                'precio': precio,
-                'descuento': descuento,
-                'csrfmiddlewaretoken': token
-            };
+            
 
             $.ajax({
-                type: "POST",
-                url: "{% url 'fac:factura_add_detalle' %}", // Asegúrate de tener esta URL definida
-                data: data,
-                success: function (response) {
-                    if (response === "OK") {
-                        location.reload(true);
-                    } else {
-                        mensaje("Error al agregar detalle.");
-                    }
+                url: '/fac/facturas/add_detalle/',
+                type: 'POST',
+                data: {
+                    enc_id: enc_id,
+                    codigo: codigo,
+                    producto_id: producto_id,
+                    cantidad: cantidad,
+                    precio: precio,
+                    descuento: descuento,
+                    dias_vencimiento_irregular: $("#dias_vencimiento_irregular").val(),
+                    csrfmiddlewaretoken: token
                 },
-                error: function (jqXHR, textStatus, errorThrow) {
-                    console.log(textStatus, errorThrow);
-                    mensaje(errorThrow, 'red');
+                success: function(response) {
+                    if (response.ok) {
+                        // Verifica que el formulario exista antes de llamar a reset
+                        if ($("#frmDetalle").length) {
+                            $("#frmDetalle")[0].reset();
+                        }
+                        $("#producto_id").val('');
+                        
+                        cargar_detalles_factura(); // Recarga la tabla de detalles
+                        // Aquí recargas la página para ver los cambios en cuotas y totales
+                        location.reload();
+                    } else {
+                        alert(response.error);
+                    }
                 }
             });
-        });
-
-        $("#buscar_producto").click(function (e) {
-            e.preventDefault();
-            abrir_modal("{% url 'fac:factura_producto' %}");
         });
 
         $("#btnEditCliente").click(function(e){
@@ -365,32 +459,88 @@
         });
     });
 
-    function buscar_producto_por_codigo(codigo) {
-        var url = `/inv/productos/buscar/${codigo}/`; // Asegúrate de tener esta URL definida en inv/urls.py
-        $.ajax({
-            type: "GET",
-            url: url,
-            success: function (data) {
-                if (data.id) {
-                    $("#codigo").val(data.codigo);
-                    $("#descripcion").val(data.descripcion);
-                    $("#precio").val(data.precio);
-                    $("#existencia").val(data.existencia); // Asumiendo que tienes un campo de existencia oculto
-                    $("#cantidad").focus();
-                } else {
-                    mensaje("Producto no encontrado.");
-                    $("#codigo").val('');
-                    $("#descripcion").val('');
-                    $("#precio").val('');
-                    $("#codigo").focus();
+    // Función para eliminar un detalle
+    function eliminar_detalle(detalle_id) {
+        var token = $("input[name='csrfmiddlewaretoken']").val();
+        if (confirm("¿Está seguro de eliminar este detalle?")) {
+            $.ajax({
+                url: '/fac/facturas/borrar_detalle/',
+                type: 'POST',
+                data: {
+                    id: detalle_id,
+                    csrfmiddlewaretoken: token
+                },
+                success: function(response) {
+                    if (response.ok) {
+                        cargar_detalles_factura();
+                        // Recarga la tabla de detalles
+                        location.reload();
+                    } else {
+                        alert(response.error);
+                    }
                 }
-            },
-            error: function (jqXHR, textStatus, errorThrow) {
-                console.log(textStatus, errorThrow);
-                mensaje("Error al buscar producto por código.", 'red');
+            });
+        }
+    }
+
+    // Función para buscar producto por código y asignar producto_id
+    function buscar_producto_por_codigo(codigo) {
+        $.ajax({
+            url: '/fac/facturas/buscar-producto-ajax',
+            type: 'GET',
+            data: {codigo: codigo},
+            success: function(data) {
+                if (data.ok) {
+                    // Asigna el id del producto al campo oculto
+                    $("#producto_id").val(data.id);
+                    $("#precio").val(data.producto.precio);
+                    // Puedes mostrar más info del producto si lo deseas
+                } else {
+                    $("#producto_id").val('');
+                    alert("Producto no encontrado");
+                }
             }
         });
     }
 
+    // Cargar productos en el modal (ejemplo básico)
+    function cargar_productos_modal() {
+        $.ajax({
+            url: '/fac/facturas/buscar-producto-ajax',
+            type: 'GET',
+            success: function(data) {
+                var tbody = $("#tablaProductos tbody");
+                tbody.empty();
+                if (data.ok && data.productos) {
+                    data.productos.forEach(function(producto) {
+                        var fila = `<tr>
+                            <td>${producto.codigo}</td>
+                            <td>${producto.nombre}</td>
+                            <td>${producto.precio}</td>
+                            <td>
+                                <button type="button" class="btn btn-success btn-sm seleccionar-producto" 
+                                    data-id="${producto.id}" 
+                                    data-codigo="${producto.codigo}" 
+                                    data-nombre="${producto.nombre}" 
+                                    data-precio="${producto.precio}">
+                                    Seleccionar
+                                </button>
+                            </td>
+                        </tr>`;
+                        tbody.append(fila);
+                    });
+                    $(".seleccionar-producto").on('click', function() {
+                        var id = $(this).data('id');
+                        var codigo = $(this).data('codigo');
+                        var precio = $(this).data('precio');
+                        $("#producto_id").val(id);
+                        $("#codigo").val(codigo);
+                        $("#precio").val(precio);
+                        $("#modalSeleccionarProducto").modal('hide');
+                    });
+                }
+            }
+        });
+    }
 </script>
 {% endblock %}

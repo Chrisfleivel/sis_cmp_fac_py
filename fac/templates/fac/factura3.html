@@ -1,0 +1,411 @@
+{% extends 'base/base.html' %}
+
+{% block page_content %}
+<form method="post" id="frmFacturas">
+    {% csrf_token %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-end">
+            <button type="submit" class="btn btn-primary mr-2">Guardar</button>
+            {% if enc.id %} {# Mostrar Imprimir solo si la factura ya existe y tiene ID #}
+                <a href="{% url 'fac:factura_imprimir_one' enc.id %}" class="btn btn-success mr-2" target="_blank">Imprimir</a>
+            {% endif %}
+            <a href="{% url 'fac:factura_list' %}" class="btn btn-secondary">Cancelar</a>
+        </div>
+        <div class="card-body">
+            <div class="content">
+                <div class="row">
+                    <div class="col-lg-6 form-group">
+                        <div class="content">
+                            <div class="row ">
+                                <div class="col-lg-1">No.:</div>
+                                <div class="col-lg-4">
+                                    {# enc.id solo se muestra si ya existe la factura #}
+                                    <input type="text" name="enc_id" id="enc_id" readonly class="form-control" value="{% if enc %}{{ enc.id }}{% endif %}">
+                                </div>
+                                <div class="col-lg-2">
+                                    Cliente:
+                                </div>
+                                <div class="col-lg-5 form-group d-flex align-items-center">
+                                    <select name="cliente" id="id_cliente" class="form-control mr-2">
+                                        <option value="">Seleccione Cliente</option>
+                                        {% for item in form.cliente.field.queryset %}
+                                            <option value="{{ item.id }}" {% if enc and enc.cliente.id == item.id %}selected{% endif %}>
+                                                {{ item.apellidos }} {{ item.nombres }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrir_modal('{% url 'fac:cliente_new' %}?t=1')">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-lg-1">Fecha:</div>
+                                <div class="col-lg-4">
+                                    <input type="text" name="fecha" id="fecha" readonly class="form-control" value="{% if enc %}{{ enc.fc|date:'d/m/Y' }}{% else %}{{ 'now'|date:'d/m/Y' }}{% endif %}">
+                                </div>
+                                <div class="col-lg-2">
+                                    Tipo Pago:
+                                </div>
+                                <div class="col-lg-5 form-group">
+                                    {{ form.tipo_pago }}
+                                </div>
+                            </div>
+                            <div class="row mt-3" id="div_tipo_vencimiento">
+                                <div class="col-lg-1">Vencimiento:</div>
+                                <div class="col-lg-4 form-group">
+                                    {{ form.tipo_vencimiento }}
+                                </div>
+                                <div class="col-lg-2">
+                                    Cuotas:
+                                </div>
+                                <div class="col-lg-5 form-group">
+                                    {{ form.cantidad_cuotas }}
+                                </div>
+                            </div>
+                            <div class="row mt-3" id="div_dias_vencimiento_irregular">
+                                <div class="col-lg-3">Días Vencimiento Irregular:</div>
+                                <div class="col-lg-9 form-group">
+                                    {{ form.dias_vencimiento_irregular }}
+                                    <small class="form-text text-muted">Separar días por comas (ej: 30,45,60)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6 form-group">
+                        <div class="content">
+                            <div class="row">
+                                <div class="col-lg-12">
+                                    <label>Observación:</label>
+                                    <textarea name="observacion" id="id_observacion" class="form-control" rows="4">{% if enc %}{{ enc.observacion }}{% endif %}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="row">
+                    <div class="col-lg-12">
+                        <h5>Detalle de Factura</h5>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-lg-2">
+                        <label>Código:</label>
+                        <input type="text" name="codigo_producto_display" id="codigo_producto_display" class="form-control" placeholder="Buscar por código" onblur="buscar_producto_por_codigo(this.value);" autocomplete="off">
+                        {# Botón para abrir modal de búsqueda de producto #}
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="abrir_modal_producto()">Buscar</button>
+                        <input type="hidden" name="producto_id" id="producto_id"> {# Aquí se guarda el ID numérico del producto #}
+                    </div>
+                    <div class="col-lg-4">
+                        <label>Descripción:</label>
+                        <input type="text" name="descripcion_producto_display" id="descripcion_producto_display" class="form-control" readonly>
+                    </div>
+                    <div class="col-lg-1">
+                        <label>Exist.:</label>
+                        <input type="text" name="existencia" id="existencia" class="form-control" readonly>
+                    </div>
+                    <div class="col-lg-1">
+                        <label>Cantidad:</label>
+                        <input type="number" name="cantidad" id="cantidad" class="form-control" value="0" min="0">
+                    </div>
+                    <div class="col-lg-2">
+                        <label>Precio:</label>
+                        <input type="number" name="precio" id="precio" class="form-control" value="0.00" step="0.01" min="0">
+                    </div>
+                    <div class="col-lg-1">
+                        <label>Descuento:</label>
+                        <input type="number" name="descuento" id="descuento" class="form-control" value="0.00" step="0.01" min="0">
+                    </div>
+                    <div class="col-lg-1">
+                        <label>&nbsp;</label>
+                        <button type="button" id="btnAgregarDetalle" class="btn btn-info form-control">Agregar</button>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-lg-12">
+                        <table class="table table-bordered table-striped" id="tblDetalles">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Descripción</th>
+                                    <th>Cantidad</th>
+                                    <th>Precio</th>
+                                    <th>Descuento</th>
+                                    <th>Sub Total</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if detalle %}
+                                    {% for det in detalle %}
+                                        <tr id="row-{{ det.id }}">
+                                            <td>{{ det.producto.codigo }}</td>
+                                            <td>{{ det.producto.descripcion }}</td>
+                                            <td>{{ det.cantidad }}</td>
+                                            <td>{{ det.precio }}</td>
+                                            <td>{{ det.descuento }}</td>
+                                            <td>{{ det.sub_total }}</td>
+                                            <td>
+                                                <button type="button" class="btn btn-danger btn-circle" onclick="abrir_modal('{% url 'fac:factura_borrar_detalle' det.id %}')">
+                                                    <i class="far fa-trash-alt"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="7" class="text-center">No hay detalles para esta factura.</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="5" class="text-right"><strong>Sub Total:</strong></td>
+                                    <td id="sub_total_footer">{% if enc %}{{ enc.sub_total|floatformat:2 }}{% else %}0.00{% endif %}</td>
+                                    <td></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="5" class="text-right"><strong>Total Descuento:</strong></td>
+                                    <td id="descuento_footer">{% if enc %}{{ enc.descuento|floatformat:2 }}{% else %}0.00{% endif %}</td>
+                                    <td></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="5" class="text-right"><strong>Total:</strong></td>
+                                    <td id="total_footer"><strong>{% if enc %}{{ enc.total|floatformat:2 }}{% else %}0.00{% endif %}</strong></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block js_page %}
+<script>
+    $(function () {
+        // Inicializar select2 para el cliente (si lo estás usando)
+        // Requiere la librería Select2.js
+        $("#id_cliente").select2({
+            placeholder: "Seleccione un cliente",
+            allowClear: true // Permite deseleccionar
+        });
+
+        // Evento para cambiar el tipo de pago
+        $("#id_tipo_pago").change(function () {
+            toggleCamposCredito();
+        });
+
+        // Evento para cambiar el tipo de vencimiento
+        $("#id_tipo_vencimiento").change(function () {
+            toggleDiasVencimientoIrregular();
+        });
+
+        // Llamar en la carga inicial para establecer el estado correcto de los campos de crédito
+        toggleCamposCredito();
+
+        // Función para ocultar/mostrar campos de crédito
+        function toggleCamposCredito() {
+            var tipoPago = $("#id_tipo_pago").val();
+            if (tipoPago === 'CR') { // Crédito
+                $("#div_tipo_vencimiento").show();
+                $("#id_tipo_vencimiento").prop('required', true);
+                $("#id_cantidad_cuotas").prop('required', true);
+                toggleDiasVencimientoIrregular(); // Ajustar visibilidad de días irregulares
+            } else { // Contado
+                $("#div_tipo_vencimiento").hide();
+                $("#div_dias_vencimiento_irregular").hide(); // Ocultar también si es contado
+                $("#id_tipo_vencimiento").val(''); // Limpiar valor
+                $("#id_cantidad_cuotas").val(''); // Limpiar valor
+                $("#id_dias_vencimiento_irregular").val(''); // Limpiar valor
+                $("#id_tipo_vencimiento").prop('required', false);
+                $("#id_cantidad_cuotas").prop('required', false);
+                $("#id_dias_vencimiento_irregular").prop('required', false);
+            }
+        }
+
+        // Función para ocultar/mostrar el campo de días de vencimiento irregular
+        function toggleDiasVencimientoIrregular() {
+            var tipoPago = $("#id_tipo_pago").val();
+            var tipoVencimiento = $("#id_tipo_vencimiento").val();
+
+            if (tipoPago === 'CR' && tipoVencimiento === 'IRR') { // Crédito e Irregular
+                $("#div_dias_vencimiento_irregular").show();
+                $("#id_dias_vencimiento_irregular").prop('required', true);
+            } else {
+                $("#div_dias_vencimiento_irregular").hide();
+                $("#id_dias_vencimiento_irregular").prop('required', false);
+                $("#id_dias_vencimiento_irregular").val(''); // Limpiar valor
+            }
+        }
+
+        // Función global para seleccionar un cliente desde el modal
+        // Esta función debe ser llamada por el modal de cliente (cliente_form.html)
+        // después de que se guarde o seleccione un cliente.
+        window.seleccionarCliente = function(id, nombres, apellidos) {
+            var clienteNombreCompleto = apellidos + ' ' + nombres;
+            var newOption = new Option(clienteNombreCompleto, id, true, true);
+            $('#id_cliente').append(newOption).trigger('change');
+            cerrar_modal(); // Asumiendo que esta función cierra tu modal
+        };
+
+        // Función para abrir el modal de búsqueda de producto
+        window.abrir_modal_producto = function() {
+            abrir_modal('{% url 'fac:factura_producto' %}'); // Asumiendo que esta es la URL para el modal de productos
+        };
+
+        // Función global para seleccionar un producto desde el modal de búsqueda
+        // Esta función debe ser llamada por el modal de producto (buscar_producto.html)
+        // una vez que el usuario selecciona un producto de la tabla.
+        window.seleccionarProducto = function(id, codigo, descripcion, precio, existencia) {
+            $("#producto_id").val(id);
+            $("#codigo_producto_display").val(codigo);
+            $("#descripcion_producto_display").val(descripcion);
+            $("#precio").val(precio);
+            $("#existencia").val(existencia);
+            $("#cantidad").focus();
+            cerrar_modal(); // Asumiendo que esta función cierra tu modal
+        };
+
+
+        // Búsqueda de producto por código (AJAX)
+        function buscar_producto_por_codigo(codigo) {
+            if (!codigo) {
+                // Limpiar campos si el código está vacío
+                $("#producto_id").val('');
+                $("#descripcion_producto_display").val('');
+                $("#precio").val('');
+                $("#existencia").val('');
+                return;
+            }
+
+            var url = `/inv/productos/buscar/${codigo}/`; // Asegúrate de tener esta URL definida en inv/urls.py
+            $.ajax({
+                type: "GET",
+                url: url,
+                success: function (data) {
+                    if (data.id) {
+                        $("#producto_id").val(data.id); // ¡¡IMPORTANTE!! Guarda el ID numérico
+                        $("#codigo_producto_display").val(data.codigo);
+                        $("#descripcion_producto_display").val(data.descripcion);
+                        $("#precio").val(data.precio);
+                        $("#existencia").val(data.existencia);
+                        $("#cantidad").focus();
+                    } else {
+                        mensaje("Producto no encontrado.", 'red');
+                        $("#producto_id").val(''); // Limpiar el ID si no se encuentra
+                        $("#codigo_producto_display").val('');
+                        $("#descripcion_producto_display").val('');
+                        $("#precio").val('');
+                        $("#existencia").val('');
+                        $("#codigo_producto_display").focus();
+                    }
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    console.log(textStatus, errorThrown);
+                    mensaje("Error al buscar producto por código.", 'red');
+                    $("#producto_id").val('');
+                    $("#codigo_producto_display").val('');
+                    $("#descripcion_producto_display").val('');
+                    $("#precio").val('');
+                    $("#existencia").val('');
+                }
+            });
+        }
+        // Asignar al window para que onblur pueda llamarla directamente
+        window.buscar_producto_por_codigo = buscar_producto_por_codigo;
+
+        // Lógica para agregar detalle (AJAX)
+        $("#btnAgregarDetalle").click(function (e) {
+            e.preventDefault();
+
+            var enc_id = $("#enc_id").val();
+            var producto_id = $("#producto_id").val();
+            var cantidad = $("#cantidad").val();
+            var precio = $("#precio").val();
+            var descuento = $("#descuento").val() || "0"; // Si está vacío, usa "0"
+
+            // Validar que la cabecera de la factura exista antes de agregar detalles
+            if (!enc_id) {
+                mensaje("Primero debe guardar la cabecera de la factura para obtener un ID.", "red");
+                return;
+            }
+
+            // Limpiar y validar valores numéricos antes de enviar
+            // Reemplaza comas por puntos para asegurar parseo correcto en JS y Python
+            cantidad = cantidad.replace(',', '.');
+            precio = precio.replace(',', '.');
+            descuento = descuento.replace(',', '.');
+
+            if (!producto_id) {
+                mensaje("Debe seleccionar un producto.", "red");
+                $("#codigo_producto_display").focus();
+                return;
+            }
+            if (isNaN(cantidad) || parseFloat(cantidad) <= 0) {
+                mensaje("La cantidad debe ser un número positivo.", "red");
+                $("#cantidad").focus();
+                return;
+            }
+            if (isNaN(precio) || parseFloat(precio) < 0) {
+                mensaje("El precio debe ser un número no negativo.", "red");
+                $("#precio").focus();
+                return;
+            }
+            if (isNaN(descuento) || parseFloat(descuento) < 0) {
+                mensaje("El descuento debe ser un número no negativo.", "red");
+                $("#descuento").focus();
+                return;
+            }
+            
+            // Convertir a float para comprobación final de que sean números
+            var numCantidad = parseFloat(cantidad);
+            var numPrecio = parseFloat(precio);
+            var numDescuento = parseFloat(descuento);
+
+            // Asegurarse de que no hay problemas de conversión en el JS
+            if (isNaN(numCantidad) || isNaN(numPrecio) || isNaN(numDescuento)) {
+                mensaje("Error interno: La cantidad, precio o descuento no son números válidos después de la limpieza.", "red");
+                return;
+            }
+
+
+            $.ajax({
+                url: "{% url 'fac:factura_add_detalle' %}",
+                type: "POST",
+                data: {
+                    csrfmiddlewaretoken: '{{ csrf_token }}',
+                    enc_id: enc_id,
+                    producto_id: producto_id,
+                    cantidad: numCantidad, // Envía los números ya parseados
+                    precio: numPrecio,
+                    descuento: numDescuento
+                },
+                success: function (response) {
+                    if (response.ok) {
+                        mensaje("Detalle agregado correctamente.");
+                        // Recargar la página para ver el detalle y los totales actualizados
+                        // Si quieres una actualización dinámica sin recargar, necesitarás más JS
+                        location.reload(true);
+                    } else {
+                        mensaje("Error al agregar detalle: " + response.error, "red");
+                        console.error("Error del servidor:", response.error); // Para depuración
+                    }
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    mensaje("Error en la comunicación con el servidor: " + errorThrown, "red");
+                    console.error("Respuesta del servidor:", jqXHR.responseText); // Para depuración
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

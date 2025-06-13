@@ -43,9 +43,9 @@ class Proveedor(ClaseModelo):
     def __str__(self):
         return '{}'.format(self.descripcion)
 
-    def save(self):
+    def save(self, *args, **kwargs):
         self.descripcion = self.descripcion.upper()
-        super(Proveedor, self).save()
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name_plural = "Proveedores"
@@ -159,6 +159,10 @@ class CuentaPagar(ClaseModelo): # Hereda de ClaseModelo para campos de auditorí
         verbose_name_plural = "Cuentas por Pagar"
         verbose_name = "Cuenta por Pagar"
         unique_together = ('compra', 'numero_cuota') # Asegura que no haya cuotas duplicadas para la misma compra
+
+    def save(self, *args, **kwargs):
+        # ...tu lógica personalizada...
+        super().save(*args, **kwargs)
 
 
 # Signals para actualizar la existencia de productos y los totales de compra
